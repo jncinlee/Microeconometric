@@ -1,0 +1,116 @@
+#去看MLE part 1 才是正確
+
+
+remove(list=ls())
+setwd("D:HU_Stat/Microeconometric/15'1110_ex3")
+install.packages("foreign")
+install.packages("aod")
+install.packages("ggplot2")
+install.packages("descr")
+install.packages("xtable")
+install.packages("sandwich")
+install.packages("lmtest")
+library(lmtest)
+library(descr)
+library(xtable)
+library(sandwich)
+library(aod)
+library(ggplot2)
+library(foreign)
+library(pastecs)
+library(np)
+mroz<-read.dta("mroz.dta")
+# Creating an overview about the variables
+variables<-cbind(colnames(mroz),attr(mroz,"var.labels"))
+#View(variables)
+options(digits=3)
+
+##############################################################################
+################  Repetition from the last tutorial  #########################
+##############################################################################
+
+# Gausian kernel function with bandwidth selection according to the rule of thumb
+bw=sd(mroz$faminc) * length(mroz$faminc)^(-1/5)
+k_bw<-ksmooth(mroz$faminc,mroz$inlf,kernel=("normal"),bandwidth = bw)
+plot(k_bw$x,k_bw$y,type="l",xlab = "Family income", ylab = "estimate of the conditional probability of spouse working",xlim=c(0,100000))
+
+# Kernel function -> Gaussian 
+bw_lc <- npregbw(xdat=mroz$faminc, ydat=mroz$inlf,regtype="lc",nmulti=2)
+np_reg_lc<-npreg(bws = bw_lc, regtype="lc")
+summary(np_reg_lc)
+fit_lc<-fitted(npreg(bws = bw_lc, regtype="lc"))
+
+# Kernel function -> Epnechnikov 
+bw_elc <- npregbw(xdat=mroz$faminc, ydat=mroz$inlf, ckertype="epanechnikov", ckerorder=4)
+np_reg_elc<-npreg(bws = bw_elc, regtype="lc")
+summary(np_reg_elc)
+fit_elc<-fitted(npreg(bws = bw_elc, regtype="lc"))
+
+# Now we can compare the kernel and bandwidth choices:
+plot(k_bw$x,k_bw$y,type="l",xlab = "Family income", ylab = "estimate of the conditional probability of spouse working",xlim=c(0,100000),lwd=2)
+lines(sort(mroz$faminc), fit_lc[order(mroz$faminc)], col= "blue",lwd=2)
+lines(sort(mroz$faminc), fit_elc[order(mroz$faminc)], col= "red",lwd=2)
+
+############################################
+############# NEW TUTORIAL #################
+
+# I have specified that I want to tabulate woman in-labour-force and 
+# that I want to have displayed the NA (missings) - always 
+mroz$inlf<-factor(mroz$inlf,levels=c(0,1),labels=c("not working","working"))
+table(mroz$inlf,dnn=c("inlf"), useNA="always")
+
+
+# We can look at the depedence of working behaviour from the numbers of kids younger than 6 years
+# present in the household (if any)
+CrossTable(mroz$inlf,mroz$kidslt6,prop.chisq = F,missing.include=F)
+
+mroz<-read.dta("mroz.dta")
+
+# First let us estimate the LPM from the last tutorial:
+rg<-lm(mroz$inlf~mroz$age + mroz$educ + mroz$nwifeinc + mroz$kidslt6)
+summary(rg)
+
+fitted_rg<-fitted.values(rg)
+plot(rg$fitted.values,mroz$inlf,ylim=c(-0.2,1.2)
+
+vcov(rg) #找出varcov matirx for regression
+
+plot(rg$fitted.values, rg$residuals, ylab = "residuals from the regression", xlab= "X'b")
+#可以看出來不是homoscedasticity 不證
+
+#找robust cov estimate
+vcovHC(rg)
+vcov(rg)
+
+#然後兩個比較做test
+coeftest(rg,vcov=vcovHC(rg,'HC0'))
+summary(rg)
+coeftest(rg,vcov=vcovHC(rg,'HC3'))
+coeftest(rg,vcov=vcovHC(rg,'HC1'))
+
+
+###################################################
+################# PROBIT Model ####################
+###################################################
+
+
+# first simulate data 做出一個probit model
+x=rnorm(100,sd=2,mean=7);x
+epsilon=rnorm(100,sd=1,mean=0)
+y_latent=-14+2*x+epsilon
+# now generate the observed y from the latent variable
+y=y_latent
+#開心一個看到的 只有01
+y[y<0]<-0;y
+y[y!=0]<-1;y
+# it is faster to do everything in vectors and not with loops
+
+probit<-glm(y~x,family = binomial(link="probit"))
+summary(probit)
+plot(x,probit$fitted.values)
+plot(sort(x),probit$fitted.values[order(x)],type="l",lwd=2)
+
+a<-seq(-1,1,length = length(y_latent))
+X<-cbind(a,0)
+ beta<-probit$coefficients
+X

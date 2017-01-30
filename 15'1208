@@ -1,0 +1,130 @@
+
+remove(list=ls())
+setwd("D:/HU_Stat/Microeconometric/15'1208_ex7")
+library(descr)
+library(ggplot2)
+library(foreign)
+#install.packages("mfx")
+library(pastecs)
+library(mfx)
+#install.packages("lmtest")
+library(lmtest)
+churn<-read.dta("churn_1.dta")
+variables<-cbind(colnames(churn),attr(churn,"var.labels"))
+View(variables)
+options(digits=6)
+
+
+
+# Defining the function that computes the probability in a logit model
+lprob<-function(x){
+  e=1/(1+exp(-x))
+  return(e)
+}
+
+# Logit Model:
+logit_u<-glm(churn~att_calls+avg_min_3+avg_min_tot+avg_calls_3+avg_calls_tot+threeway_mean+avg3rev+avgrev_life+forwarded_calls+cust_care_calls+drop_calls+drop_dat_mean+blck_vce_mean+blck_dat_mean+eqpdays+luxury+months+actvsubs,data=churn, family=binomial(link="logit"))
+summary(logit_u)
+L_u<-logLik(logit_u);L_u  #叫出loglikelihoodvalue
+b_u=logit_u$coefficients
+
+# We want to see the correlation between the signifficant and insignifficant variables:
+
+data<-cbind(churn$avg_calls_3,churn$avg_min_3)
+# View(data)
+corr(cbind(churn$avg_calls_3,churn$avg_min_3))
+# it looks like that the two variables meassure the same 
+# characteristics (the intensity of usage). And that since 
+# the number of minutes used is much more specific meassure, 
+# the number of calls does not 
+
+corr(cbind(churn$avg_calls_tot,churn$avg_min_tot))
+# We can say the same about the average total calls and average total minutes
+
+logitmfx(churn~att_calls+avg_min_3+avg_min_tot+avg_calls_3+avg_calls_tot+threeway_mean+avg3rev+avgrev_life+forwarded_calls+cust_care_calls+drop_calls+drop_dat_mean+blck_vce_mean+blck_dat_mean+eqpdays+luxury+months+actvsubs,data=churn,atmean=FALSE)
+# You see that it take a while to compute AMPE if you have many obs.
+
+''' 
+AMPE, average effect of all ppl. not single , not average person(MPE at A)
+avg_min_3: average of 100 min call reduce 0.01579% probability to change their Handy
+eqpdays: ur device is older 1 day have 0.000205 increase in prob to change Handy
+'''
+
+# Let's test wehther dropped and blocked data calls together with average calls
+# (total as well as in the last 3 months explain sth.)
+# 把上面全model的裡面不顯著的beta刪光光 趣比看有沒有差 看結果應該同時是零 可以刪
+
+# We need to estimate the model again:
+logit_r<-glm(churn~att_calls+avg_min_3+avg_min_tot+threeway_mean+avg3rev+avgrev_life+forwarded_calls+cust_care_calls+drop_calls+blck_vce_mean+eqpdays+luxury+months+actvsubs,data=churn, family=binomial(link="logit"))
+summary(logit_r)
+L_r<-logLik(logit_r);L_r
+b_r=logit_r$coefficients
+
+LR=-2*(L_r-L_u);LR
+# We have dropped 4 Variables, so we need to check the value with the 
+# CHi square distribution with df=4:
+qchisq(0.95,df=4)
+LR>qchisq(0.95,df=4)
+# So we can't reject the Null-Hypothesis about the equlity of the models:
+
+# What is the p-value linked to the LR-statistics?
+pchisq(LR,df=4) 
+
+# Wald test, testing the same thing:
+# 用wald在做一次
+b_u
+# We dropped 
+b_u[5];b_u[6];b_u[13];b_u[15]
+length(b_u)
+R=rbind(rep(0,length(b_u)),rep(0,length(b_u)),rep(0,length(b_u)),rep(0,length(b_u)));R
+
+# Now we change the components that will picked up the respective beta by 1: 
+R[1,5]<-1;R[2,6]<-1;R[3,13]<-1;R[4,15]<-1;R
+
+# How do the component look like? :
+R %*% b_u
+R %*% vcov(logit_u) %*% t(R)
+wald=t(R %*% b_u) %*% solve(R %*% vcov(logit_u) %*% t(R)) %*% (R %*% b_u);wald
+LR
+qchisq(0.95,df=4)
+wald>qchisq(0.95,df=4)
+1-pchisq(wald,df=4)
+
+waldtest(logit_u, logit_r, test = "Chisq")
+# the same exact number as well as the p-value with the 
+# R build-in command.
+
+# We can test different linear hypothesis with wald test:
+b_u[16];b_u[17]
+summary(churn$luxury)
+hist(churn$luxury)
+plot(churn$luxury,churn$hnd_price,yaxt="n")
+abline(h=45);abline(h=115);abline(h=175);abline(h=235)
+axis(2, at = c(0,45,100,115,175,200,235,300,400,500), las=2)
+
+hist(churn$eqpdays)
+
+# To test whether the effect of owing the curremt device 
+# for 3 years is outweighted 
+R1=rep(0,length(b_u));R1
+dim(R1)<-c(1,length(b_u))
+R1[1,16]<-(3*365)
+R1[1,17]<-(1);R1
+R1 %*% b_u
+R1 %*% vcov(logit_u) %*% t(R1)
+wald1 = t(R1 %*% b_u) %*% solve(R1 %*% vcov(logit_u) %*% t(R1)) %*% (R1 %*% b_u);wald1
+qchisq(0.95,df=1)
+wald1>qchisq(0.95,df=1)
+
+# What is the respective p-value:
+1-pchisq(wald1,df=1)
+# pchisq(z, df) will tell you the value of the CDF at the
+# point==z. So what is the prability of getting a number 
+# smaller than z under the assumed chisq-distribution with 
+# one degree of freedom.
+# Our H0 is rejected.
+
+
+# Lagrange multiplier test:
+
+# See lecture slides (a practical example was discussed)

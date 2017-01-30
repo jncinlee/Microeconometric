@@ -1,0 +1,65 @@
+remove(list=ls())
+setwd("D:/HU_Stat/Microeconometric")
+library(foreign)
+install.packages("pastecs")
+require(boot)
+library(pastecs)
+mroz<-read.dta("mroz.dta")
+
+
+# to get a basic idea about the dataset, we can look at the first couple of observations
+head(mroz)
+tail(mroz)
+# but it can be used more versitile
+mroz[1:10,1:4]
+
+
+a<-attr(mroz,"var.labels") #fetch everything from variable property
+a
+b<-colnames(mroz) #fetch everything from variable
+dim(b)<-c(22,1) #refromulate above two
+dim(a)<-c(22,1)
+variables<-cbind(b,a) #combine them together, some variable to its property
+variables
+# This works only if you did not specify explicitely that mroz is a data.frame, i.e.
+# i.e.: you have used mroz<-read.dta("path") instead of mroz<-data.frame(read.dta("path"))
+
+# You don't have to create anything to have an overview of the variables with their labels in the dataset
+# And you can use the following instead
+View(cbind(colnames(mroz),attr(mroz,"var.labels")))
+# If you would like to change names of the variables you would need to do it like this:
+colnames(mroz)[1]<-c("INLF")
+colnames(mroz)[1]<-c("inlf")
+# you are not changing the vartiable's name infl but you are changing
+# the first column's name of the "matrix" called MROZ.
+
+summary(mroz)
+options(digits=3)
+stat.desc(cbind(mroz$inlf,mroz$hours,mroz$kidslt6,mroz$educ,mroz$wage,mroz$unem,mroz$nwifeinc))
+# If only you want to see the basic statistics you can specify:
+stat.desc(cbind(mroz$inlf,mroz$hours,mroz$kidslt6,mroz$educ,mroz$wage,mroz$unem,mroz$nwifeinc),desc=FALSE)
+
+##question start
+#use ksmooth package
+?ksmooth
+plot(mroz$faminc,mroz$inlf,xlab = "Family Income", ylab = "In Labor Force")
+lines(ksmooth(mroz$faminc,mroz$inlf, bandwidth = 2000),col = "red", type = "l") 
+#ksmooth default bw = 0.5超小
+lines(ksmooth(mroz$faminc,mroz$inlf, bandwidth = 10000),col = "blue", type = "l")
+lines(ksmooth(mroz$faminc,mroz$inlf, bandwidth = 50000),col = "green", type = "l")
+
+#不同的h不同越大h把線拉平滑
+#family income = 20000, the prob women go into labor = 0.6 
+#x兩個變數 畫出來的圖更奇怪
+
+rg<-lm(mroz$inlf ~ mroz$age+mroz$educ+mroz$faminc+mroz$nwifeinc)
+summary(rg) #只有famincome nwif有顯著
+fit_rg<-fitted(rg)
+
+##單元
+rg<-lm(mroz$inlf ~ mroz$nwifeinc)
+summary(rg) #只有famincome nwif有顯著
+fit_rg<-fitted(rg)
+plot(mroz$nwifeinc, mroz$inlf)
+lines(sort(mroz$nwifeinc),fit_rg[order(mroz$nwifeinc)], col = "blue")
+

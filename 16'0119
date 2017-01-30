@@ -1,0 +1,99 @@
+remove(list=ls())
+setwd("D:\\HU_Stat\\Microeconometric\\16'0112_ex8")
+library(descr)
+library(ggplot2)
+library(foreign)
+library(pastecs)
+library(mfx)
+library(lmtest)
+library(Matrix)
+library(glmx)
+#install.packages("nnet")
+library(nnet)
+#install.packages("mlogit")
+library(mlogit)
+school<-read.dta("school_y.dta")
+variables<-cbind(colnames(school),attr(school,"var.labels"))
+View(variables)
+options(digits=6)
+
+
+summary(school$mothemp)
+
+levels(school$mothmarried)
+summary(school$mothmarried)
+
+school$mothmarried<-factor(school$mothmarried,levels=c("[1] Married 1","[2] Single 2","[3] Widowed 3","[4] Divorced 4","[5] Separated 5"))
+summary(school$mothmarried)
+is.factor(school$school)
+
+# Since R is essentially stupid, we have to generate dummy variables out of any categotrical variables
+# in our dataset, so 
+
+mothmarried2<-matrix(NA,dim(school)[1],4)# create matrix with NA's of length number of observations and columns 4
+for (s in 2:5) {
+  names<- c("[1] Married 1", "[2] Single 2", "[3] Widowed 3" ,  "[4] Divorced 4" , "[5] Separated 5")
+  mothmarried2[,s-1]<-ifelse(school$mothmarried==names[s],1,0) 
+}  
+mothmarried2
+sum(mothmarried2)
+summary(school$mothmarried)[2]+summary(school$mothmarried)[3]+summary(school$mothmarried)[4]+summary(school$mothmarried)[5]
+
+mothemp2<-matrix(NA,dim(school)[1],2)# create matrix with NA's of length number of observations and columns 2
+for (s in 2:3) {
+  names<- c("[1] Full Time 1", "[2] Part Time 2", "[3] Not Working 3")
+  mothemp2[,s-1]<-ifelse(school$mothemp==names[s],1,0) 
+}
+mothemp2
+sum(mothemp2)
+summary(school$mothemp)[2]+summary(school$mothemp)[3]
+
+colnames(mothmarried2)<-c("single", "widowed", "divorced", "separated")
+colnames(mothemp2)<-c("part_time", "not_working")
+
+school<-cbind(school,mothmarried2,mothemp2)
+school
+colnames(school)
+
+formm <- as.formula(paste("school ~ ", paste(colnames(school)[c(4,5,6,10,14,15,16,17,18,19)], collapse="+")))
+
+mlogit1<-multinom(formm, data=school)
+summary(mlogit1)
+
+school_reshaped<-mlogit.data(school, shape = "wide", choice = "school")
+
+ 
+#Estimate the model:
+form <-  as.formula(paste("school ~1 |",paste(colnames(school)[c(4,5,6,10,14,15,16,17,18,19)], collapse="+")))
+form
+mlogit2<-mlogit(form, data = school_reshaped)
+summary(mlogit2)
+
+# e=effects(mlogit2, covariate = "linc",type = c("aa"), data = school)
+
+# Marginal Probability Effects:
+
+#Create a data.frame for the marginal effects (estimate a vector with the means for each regressor,
+# except for working (Full time work) and mothmarried = 1 (for mother is married)):
+data_marginal_effects<- with(school_reshaped, data.frame(totkids=2,birth_order=1,
+                            linc=log(mean(exp(linc))),motheduc=mean(motheduc),single=0, widowed=0, divorced=0, separated=0,
+                            part_time=0,not_working=0))
+data_marginal_effects
+# safe names
+names_data_marginal_effects<-names(data_marginal_effects);names_data_marginal_effects
+# now proceed to calculate the marginal probability effects at means (and not at specific value)
+# I set the dummy-variables 
+data_marginal_effects<-rep(as.numeric(data_marginal_effects[1,]),3);data_marginal_effects
+data_marginal_effects<-data.frame(matrix(data_marginal_effects,nrow=3,byrow=TRUE),stringsAsFactors=FALSE);data_marginal_effects
+names(data_marginal_effects)<-names_data_marginal_effects;data_marginal_effects
+
+#Source the corrected function:
+source("marginal_effects.r")
+
+#Obtain marginal effects for the covariate man:
+# (at means for the other covariates)
+function_marginal_effects(mlogit2, covariate ="linc", data=data_marginal_effects)
+
+
+# For the categorical variable hab:
+function_marginal_effects(mlogit2, covariate ="single", data=data_marginal_effects)

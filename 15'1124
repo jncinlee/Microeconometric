@@ -1,0 +1,186 @@
+remove(list=ls())
+setwd("D:/HU_Stat/Microeconometric")
+library(descr)
+library(ggplot2)
+library(foreign)
+#install.packages("mfx")
+library(pastecs)
+library(mfx)
+mroz<-read.dta("mroz.dta")
+variables<-cbind(colnames(mroz),attr(mroz,"var.labels"))
+options(digits=6)
+
+
+# Logit Model:
+logit<-glm(mroz$inlf~mroz$kidslt6+mroz$age+mroz$educ+mroz$unem+mroz$city+mroz$exper+mroz$nwifeinc, family=binomial(link="logit"))
+summary(logit)
+
+# positive coefficient of educ => positive effect 
+# we know that with probit/logit the marginal probabilty effects and the coefficients have the same sign 
+# (because the probability density functions take on only positive values ...)
+
+probit<-glm(mroz$inlf~mroz$kidslt6+mroz$age+mroz$educ+mroz$unem+mroz$city+mroz$exper+mroz$nwifeinc, family=binomial(link="probit"))
+summary(probit)
+
+# we see that probit coefficients are smaller compared to logit ones 
+# (but it doesn't have to imply anything ...). 
+                                                                      
+                                                                      
+# Since the coefficient cannot be meaningfully interpreted (only w.r.t to latent variable which usually don't have any meaningful scale)
+# we need something to estimate the marginal effects,
+# which is just the 1st derivation of the conditional probability with respect 
+# to given paramter Beta_j
+logitmfx(inlf~kidslt6+age+educ+unem+city+exper+nwifeinc,data=mroz,atmean=FALSE)
+
+'The coefficient of age is negative and highly significant 
+MPE_age= -.017184, Interpreatation: The estimated averrage marginal probability 
+effect of age in our sample suggests that an additional year decreases the probability 
+of being active in the labour market by roughly 1.72 PERCENTAGE POINTS holding all other factors constant (ceteris paribus). 
+Moreover, the aforementioned effect is highly significant, i.e. significant even at minuscule level of significance.'
+  
+# Now the same thing but evaluated at means
+logitmfx(inlf~kidslt6+age+educ+unem+city+exper+nwifeinc,data=mroz,atmean=TRUE)
+
+"The estimated marginal probability effect of education suggests that 
+for a representative woman from our sample (a woman featuring exact mean-characteristics)
+the probability of working increases with an additional year spent 
+in the educational process by arround 5.45 PERCENTAGE POINTS ceteris paribus. 
+Additionaly, a negligible p-value in the neighbourhood of zero implies its high signifficance."
+  
+# NOW THE SAME FOR PROBIT:
+probitmfx(inlf~kidslt6+age+educ+unem+city+exper+nwifeinc,data=mroz,atmean=FALSE)
+# The MPE for age was -.017184 with the logit model. Now it is Beta_age= -.017683, so 
+# very close as we would expect. The interpretation is the same ...
+
+probitmfx(inlf~kidslt6+age+educ+unem+city+exper+nwifeinc,data=mroz,atmean=TRUE)
+" The logit estimates amounted to 5.45 percentage points. This estimate is with 
+5.146 percentage points very close. The interpretation is the same." 
+
+# What would your answer be if I asked about the effect of having colledge degree against
+# having only the mean education (in our sample)
+
+# What is the mean education in our sample? And mena characteristics in our sample
+mean=c(mean(mroz$kidslt6),mean(mroz$age),mean(mroz$educ),mean(mroz$unem),mean(mroz$city),mean(mroz$exper),mean(mroz$nwifeinc));mean
+dim(mean)<-c(1,7)
+names(mean)<-c("kidslt6","age","educ","unem","city","exper","nwifeinc");mean
+
+# Now we can querry the mean of education by remembering that it is the second element in
+# the mean vector 
+mean[1,3]
+# or by calling it by the name we have assgined to it:
+mean["educ"]
+# the mean length of education is 12.28 years, so approximately High-School degree:
+
+# Now the task: What is the effect of heaving only High-School against having graduated from 
+# college?:
+
+# 1st alternative: 
+# Simply multiply the MPE(at means) by 4:
+probit_at_means<-probitmfx(inlf~kidslt6+age+educ+unem+city+exper+nwifeinc,data=mroz,atmean=TRUE)
+probit_at_means$mfxest
+probit_at_means$mfxest[3,1]
+
+four_mpe_means=4*probit_at_means$mfxest[3,1];four_mpe_means
+# Interpret this number
+# Standard Deviation:
+probit_at_means$mfxest[3,2]*4
+
+# Comparing MPE at a specific value and the DPE 
+
+# How to compute the DPE?
+mean=cbind(1,mean);mean
+mean_adj=mean
+mean_adj[1,4]<-mean[1,4]+4;mean_adj
+
+# Now we have to compare the probabilities to which that mean and mean_adj are linked, respectively
+# Hint (R want transpose a vector, like )
+P_0=pnorm(probit$coefficients%*%t(mean));P_0
+P_1=pnorm(probit$coefficients%*%t(mean_adj));P_1
+# So let's look, what does the DPE looks like?
+P_1-P_0
+# let's compare it to the 4*MPE:
+four_mpe_means
+
+# So 4*MPE is larger, we overestimate the true effect. Why is it so?
+
+
+# Ploting the figure from the slide 16:
+x=rnorm(1000)
+z=pnorm(x)
+odds=z/(1-z)
+plot(z,odds,ylim=c(0,14))
+plot(sort(z),odds[order(z)],type="l",ylim=c(0,14),ylab="Odds",xlab="Probability(Y=1)",yaxt="n",xaxt="n",lwd=2.5)
+axis(2, at = seq(0, 14, by = 1), las=2)
+axis(1, at = seq(0, 1, by = 0.1), las=1)
+abline(h=1)
+# odds for Logit Model:
+# We need to specify an individual for which we are computing it,
+# We can as well as take the "mean-individual" in our sample 
+# Doing it just out of compfort, since we know it does not make so much sense with 
+# dummy variables:
+
+# Odds for the "mean individual":
+P_l=1/(1+exp(-(logit$coefficients%*%t(mean))));P_l
+odds_l=P_l/(1-P_l);odds_l
+
+# But we can do it in an easier way:
+odds_l1=exp(logit$coefficients%*%t(mean));odds_l1
+# We get exactly the same number.
+
+
+# Odds for the mean individual in the probit model:
+P_p=pnorm(probit$coefficients%*%t(mean));P_p
+odds_p=P_p/(1-P_p);odds_p
+# the estimate resulting out of the probit model is litle bit different.
+
+" Interpretantion:
+For an individual with mean characteristics in our sample, the probability to work is about 40%
+(43% in the logit model) higher than the probability not to work."
+
+"How it is for our individual with the college degree but otherwise mean characteristics?"
+odds_l2=exp(logit$coefficients%*%t(mean_adj));odds_l2
+odds_l1
+
+" We see that the odds clearly change with the characteristics. The individual with a college
+degree but otherwise averrage characteristics have by 350% higher probability to work than not to.
+to"
+
+# Odds ratios for education and city in logit model:
+
+# Hint: it is little bit strange how R handles vectors...
+  
+logit$coefficients[4]
+exp(logit$coefficients[4])
+'Interpretation: The ratio of the probability to work and not to work is by about 
+25% higher for and individual with 1 year more education than compared to an otherwise 
+identical individual'
+
+mean(mroz$unem)
+logit$coefficients[5]
+exp(logit$coefficients[5])
+'Interpretation: Comparing two random indentical individuals living in two cities. 
+The one living in the city whose unemployment rate is by 1% higher has by about 2%
+lower odds of working. The ration of the probability to work to the probability
+not to work is by about 2% smaller.'
+
+# Computing it for Probit Model:
+
+'We need basically to compute the odds for the two individuals:'
+mean
+# The elements of the vector are values for 
+# kidslt6,age,educ,unemp,city,experience,nwinc
+  char=c(1,0,40,12,8,1,10,30);char
+char_1=c(1,0,40,13,8,1,10,30);char_1
+xb=probit$coefficients%*%char;xb
+xb1=probit$coefficients%*%char_1;xb1
+# We see that the two vectors are identical but for education:
+odds_ratio_probit=(pnorm(xb1)/(1-pnorm(xb1)))/(pnorm(xb)/(1-pnorm(xb)))
+odds_ratio_probit
+
+' So we see that for the women which has no kids younger than 6 years,
+is 40 years old , 12 years of education,living in a city with 8% 
+unemployment rate, 10 years of work-experience, living in the 
+family with non-wife income of 30 tsd $ per year the ration of 
+the probability to work and the probability not to, increase by 
+24% i the woman has 13 instead of 12 years of education.' 
+

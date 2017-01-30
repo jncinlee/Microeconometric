@@ -1,0 +1,91 @@
+remove(list=ls())
+setwd("D:\\HU_Stat\\Microeconometric\\16'0112_ex8")
+library(descr)
+library(ggplot2)
+library(foreign)
+library(pastecs)
+library(mfx)
+library(lmtest)
+library(Matrix)
+library(glmx)
+churn<-read.dta("churn_1.dta")
+
+variables<-cbind(colnames(churn),attr(churn,"var.labels"))
+options(digits=6)
+
+
+# Pseudo R_squared:
+
+# Estimate the probit model just with the constant:
+probit_constant<-glm(churn~1,data=churn, family=binomial(link="probit"))
+
+# The "unrestricted" probit model from the previous tutorial. So the probit model with the full set 
+# of explenatory variables. (Not unrestricted in the sense of this excercise)
+probit_u<-glm(churn~att_calls+avg_min_3+avg_min_tot+avg_calls_3+avg_calls_tot+threeway_mean+avg3rev+avgrev_life+forwarded_calls+cust_care_calls+drop_calls+drop_dat_mean+blck_vce_mean+blck_dat_mean+eqpdays+luxury+months+actvsubs,data=churn, family=binomial(link="probit"))
+
+# Creating a new variable credit_class being 1 if the credit_card category is advantegous: A or B and 0 for all lower categories.
+# We hope to approximate the credit restrictions an individual is facing with this variable.
+churn$credit<-ifelse((churn$credit_class=="A")|(churn$credit_class=="A2")|(churn$credit_class=="A2")|(churn$credit_class=="AA")|(churn$credit_class=="B")|(churn$credit_class=="B2")|(churn$credit_class=="BA"),1,0)
+
+
+probit_het<-hetglm(formula = churn ~ att_calls + avg_min_3 + avg_min_tot + avg_calls_3 + avg_calls_tot + threeway_mean + avg3rev + avgrev_life + forwarded_calls + cust_care_calls + drop_calls + drop_dat_mean + blck_vce_mean + blck_dat_mean + eqpdays + luxury + months + actvsubs|credit+hnd_price,family = binomial(link = "probit"), data = churn)
+
+
+
+
+
+
+##############################
+### Vuong Test
+##############################
+
+# I can only perform the test on the subset of the dataset, since 
+# I want to transform some variables to their logarithm. (ln(0)=-infinity)
+# (that is something you would not usually do and serves only educational purposes)
+which(churn$avg_min_3<=0)
+churn1<-subset(churn,avg_min_3>0)
+dim(churn)-dim(churn1)
+# Let us omit the missings, since it will be easier for programming:
+churn1<-na.omit(churn1)
+dim(churn)-dim(churn1)
+
+# We first do it for a smaller subset of our data. We choose one 5% of the original data.
+# Then we will comment it out and rerun everything to see the result for the full sample.
+set.seed(0139)
+churn1<-churn1[sample(1:nrow(churn1), 1*dim(churn1)[1],replace=FALSE),]
+
+
+# Probit model:
+probit<-glm(churn~att_calls+avg_min_3+avg_min_tot+avg_calls_3+avg_calls_tot+threeway_mean+avg3rev+avgrev_life+forwarded_calls+cust_care_calls+drop_calls+drop_dat_mean+blck_vce_mean+blck_dat_mean+eqpdays+hnd_price+months+actvsubs,data=churn1, family=binomial(link="probit"))
+summary(probit)
+L_p<-logLik(probit);L_p
+b_p=probit$coefficients
+
+##################
+# New Variabels:
+##################
+
+churn1$ln_avg_min_3=log(churn1$avg_min_3)
+churn1$ln_avg_min_tot=log(churn1$avg_min_tot)
+churn1$ln_avgrev_life=log(churn1$avgrev_life)
+churn1$ln_avg3rev=log(churn1$avg3rev)
+churn1$ln_hnd_price=log(churn1$hnd_price)
+churn1$ln_eqpdays=log(churn1$eqpdays)
+churn1$ln_att_calls=log(churn1$att_calls)
+churn1$ln_drop_calls=log(churn1$drop_calls)
+
+summary(churn1$ln_avg_min_3)
+summary(churn1$ln_avg_min_tot)
+summary(churn1$ln_avgrev_life)
+summary(churn1$ln_avg3rev)
+summary(churn1$ln_hnd_price)
+summary(churn1$ln_eqpdays)
+# Minus Infinity as the lowest values, cannot be used
+summary(churn1$ln_att_calls)
+# Minus Infinity as the lowest values, cannot be used
+summary(churn1$ln_drop_calls)
+# Minus Infinity as the lowest values, cannot be used
+
+# Logit Model with ln-transformed variables:
+logit<-glm(churn~att_calls+ln_avg_min_3+ln_avg_min_tot+avg_calls_3+avg_calls_tot+threeway_mean+ln_avg3rev+ln_avgrev_life+forwarded_calls+cust_care_calls+drop_calls+drop_dat_mean+blck_vce_mean+blck_dat_mean+eqpdays+ln_hnd_price+months+actvsubs,data=churn1, family=binomial(link="logit"))
+summary(logit)
